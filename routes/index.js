@@ -1,18 +1,26 @@
-#!/usr/bin/node
+import express from 'express';
 
-const express = require('express');
-const AppController = require('../controllers/AppController');
-const UsersController = require('../controllers/UsersController');
-const AuthController = require('../controllers/AuthController');
+import { getStatus, getStats } from '../controllers/AppController';
+import { postNew, getMe } from '../controllers/UsersController';
+import { getConnect, getDisconnect } from '../controllers/AuthController';
+import {
+  postUpload, getShow, getIndex, putPublish, putUnPublish, getFile,
+} from '../controllers/FilesController';
 
 const router = express.Router();
 
-router.get('/status', AppController.getStatus);
-router.get('/stats', AppController.getStats);
-router.post('/users', UsersController.postNew);
-router.get('/connect', AuthController.getConnect);
-router.get('/disconnect', AuthController.getDisconnect);
-router.get('/users/me', AuthController.getMe);
+router.get('/status', getStatus);
+router.get('/stats', getStats);
+router.post('/users', postNew);
+router.get('/users/me', getMe);
+router.get('/connect', getConnect);
+router.get('/disconnect', getDisconnect);
+router.post('/files', postUpload);
+router.get('/files', getIndex);
+router.get('/files/:id', getShow);
+router.put('/files/:id/publish', putPublish);
+router.put('/files/:id/unpublish', putUnPublish);
+router.get('/files/:id/data', getFile);
 
-module.exports = router;
+export default router;
 
