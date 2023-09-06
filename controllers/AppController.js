@@ -15,4 +15,3 @@ export const getStats = async (req, res) => {
   res.send({ users, files });
 };
 
-

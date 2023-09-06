@@ -29,5 +29,3 @@ export const getMe = async (req, res) => {
   return res.json({ email: user.email, id: user._id });
 };
 
-
-
