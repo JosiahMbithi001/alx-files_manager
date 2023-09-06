@@ -1,72 +1,78 @@
-#!/usr/bin/node
+const MongoClient = require('mongodb');
 
-const { MongoClient } = require('mongodb');
-const mongo = require('mongodb');
-const { pwdHashed } = require('./utils');
+const host = process.env.DB_HOST || 'localhost';
+const port = process.env.DB_PORT || 27017;
+const dbName = process.env.DB_DATABASE || 'files_manager';
 
 class DBClient {
   constructor() {
-    const host = (process.env.DB_HOST) ? process.env.DB_HOST : 'localhost';
-    const port = (process.env.DB_PORT) ? process.env.DB_PORT : 27017;
-    this.database = (process.env.DB_DATABASE) ? process.env.DB_DATABASE : 'files_manager';
-    const dbUrl = `mongodb://${host}:${port}`;
-    this.connected = false;
-    this.client = new MongoClient(dbUrl, { useUnifiedTopology: true });
-    this.client.connect().then(() => {
-      this.connected = true;
-    }).catch((err) => console.log(err.message));
+    this.db = null;
+    MongoClient.connect(
+      `mongodb://${host}:${port}/${dbName}`,
+      { useUnifiedTopology: true },
+      (err, client) => {
+        if (err) console.log(err);
+        this.db = client.db(dbName);
+        this.db.createCollection('users');
+        this.db.createCollection('files');
+      },
+    );
   }
 
   isAlive() {
-    return this.connected;
+    return !!this.db;
   }
 
-  async nbUsers() {
-    await this.client.connect();
-    const users = await this.client.db(this.database).collection('users').countDocuments();
-    return users;
-  }
+  async nbUsers() { return this.db.collection('users').countDocuments(); }
 
-  async nbFiles() {
-    await this.client.connect();
-    const users = await this.client.db(this.database).collection('files').countDocuments();
-    return users;
-  }
+  async nbFiles() { return this.db.collection('files').countDocuments(); }
+
+  async findUser(user) { return this.db.collection('users').findOne(user); }
 
   async createUser(email, password) {
-    const hashedPwd = pwdHashed(password);
-    await this.client.connect();
-    const user = await this.client.db(this.database).collection('users').insertOne({ email, password: hashedPwd });
-    return user;
+    await this.db.collection('users').insertOne({ email, password });
+
+    const newUser = await this.db.collection('users').findOne({ email });
+
+    return { id: newUser._id, email };
   }
 
-  async getUser(email) {
-    await this.client.connect();
-    const user = await this.client.db(this.database).collection('users').find({ email }).toArray();
-    if (!user.length) {
-      return null;
-    }
-    return user[0];
+  async uploadFile(data) {
+    await this.db.collection('files').insertOne(data);
+    return this.db.collection('files').findOne(data);
   }
 
-  async getUserById(id) {
-    const _id = new mongo.ObjectID(id);
-    await this.client.connect();
-    const user = await this.client.db(this.database).collection('users').find({ _id }).toArray();
-    if (!user.length) {
-      return null;
-    }
-    return user[0];
+  async findFile(data) {
+    return this.db.collection('files').findOne(data);
   }
 
-  async userExist(email) {
-    const user = await this.getUser(email);
-    if (user) {
-      return true;
-    }
-    return false;
+  async aggregateFiles(userId, parentId, page = 1) {
+    const user = { userId };
+    if (parentId && parentId !== undefined) user.parentId = parentId;
+
+    const cursor = await this.db.collection('files').aggregate([
+      { $match: user },
+      { $skip: (page - 1) * 20 },
+      { $limit: 20 },
+    ]).toArray();
+    const files = [];
+    cursor.forEach(({
+      _id, userId, name, type, isPublic, parentId,
+    }) => {
+      files.push({
+        id: _id, userId, name, type, isPublic, parentId,
+      });
+    });
+    return files;
+  }
+
+  async updateFile(data, change) {
+    await this.db.collection('files').updateOne(data, { $set: change });
+    return this.db.collection('files').findOne(data);
   }
 }
 
 const dbClient = new DBClient();
+
 module.exports = dbClient;
+
